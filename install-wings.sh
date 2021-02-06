@@ -28,6 +28,13 @@ set -e
 #                                                                           #
 #############################################################################
 
+# Create logs in root folder
+exec >/root/log.txt 2>&1
+
+# DV certificate validation problems from Let's Encrypt happen more often if we are too quick
+echo "StackScript started. Waiting 5 minutes."
+sleep 300s
+
 # versioning
 GITHUB_SOURCE="master"
 SCRIPT_RELEASE="canary"
@@ -71,6 +78,20 @@ CONFIGURE_FIREWALL_CMD=false
 CONFIGURE_LETSENCRYPT=false
 FQDN=""
 EMAIL=""
+
+choice="y"
+CONFIRM_SSL="y"
+CONFIRM_PROCEED="y"
+CONFIRM_INSTALL_MARIADB="n"
+CONFIRM_UFW="y"
+CONFIRM="y"
+
+# <UDF name="FQDN_INPUT" label="FQDN" example="Example: node.instagamez.com" />
+# <UDF name="NODE_TOKEN" label="Node auth token" example="Example: jibberish" />
+# <UDF name="NODE_ID" label="Node unique integer ID" example="Example: 10" />
+
+FQDN=$FQDN_INPUT
+EMAIL="ssl@instagamez.com"
 
 #################################
 ####### Version checking ########
@@ -165,7 +186,7 @@ check_os_comp() {
     print_warning "Using any other architecture than 64 bit (x86_64) will cause problems."
 
     echo -e -n  "* Are you sure you want to proceed? (y/N):"
-    read -r choice
+    # read -r choice
 
     if [[ ! "$choice" =~ [Yy] ]]; then
       print_error "Installation aborted!"
@@ -342,6 +363,7 @@ systemd_file() {
   curl -o /etc/systemd/system/wings.service $GITHUB_BASE_URL/configs/wings.service
   systemctl daemon-reload
   systemctl enable wings
+  cd /etc/pterodactyl && sudo wings configure --panel-url https://ptero.instagamez.com/ --token $NODE_TOKEN --node $NODE_ID
   echo "* Installed systemd service!"
 }
 
@@ -374,7 +396,7 @@ ask_letsencrypt() {
   print_warning "You cannot use Let's Encrypt with your hostname as an IP address! It must be a FQDN (e.g. node.example.org)."
 
   echo -e -n "* Do you want to automatically configure HTTPS using Let's Encrypt? (y/N): "
-  read -r CONFIRM_SSL
+  # read -r CONFIRM_SSL
 
   if [[ "$CONFIRM_SSL" =~ [Yy] ]]; then
     CONFIGURE_LETSENCRYPT=true
@@ -445,7 +467,7 @@ letsencrypt() {
   systemctl stop nginx || true
 
   # Obtain certificate
-  certbot certonly --no-eff-email --email "$EMAIL" --standalone -d "$FQDN" || FAILED=true
+  certbot certonly --no-eff-email --agree-tos --email "$EMAIL" --standalone -d "$FQDN" || FAILED=true
 
   systemctl start nginx || true
 
@@ -481,7 +503,7 @@ main() {
   if [ -d "/etc/pterodactyl" ]; then
     print_warning "The script has detected that you already have Pterodactyl wings on your system! You cannot run the script multiple times, it will fail!"
     echo -e -n "* Are you sure you want to proceed? (y/N): "
-    read -r CONFIRM_PROCEED
+    # read -r CONFIRM_PROCEED
     if [[ ! "$CONFIRM_PROCEED" =~ [Yy] ]]; then
       print_error "Installation aborted!"
       exit 1
@@ -520,13 +542,13 @@ main() {
   echo -e "* ${COLOR_RED}Note${COLOR_NC}: If you installed the Pterodactyl panel on the same machine, do not use this option or the script will fail!"
   echo -n "* Would you like to install MariaDB (MySQL) server on the daemon as well? (y/N): "
 
-  read -r CONFIRM_INSTALL_MARIADB
+  # read -r CONFIRM_INSTALL_MARIADB
   [[ "$CONFIRM_INSTALL_MARIADB" =~ [Yy] ]] && INSTALL_MARIADB=true
 
   # UFW is available for Ubuntu/Debian
   if [ "$OS" == "debian" ] || [ "$OS" == "ubuntu" ]; then
     echo -e -n "* Do you want to automatically configure UFW (firewall)? (y/N): "
-    read -r CONFIRM_UFW
+    # read -r CONFIRM_UFW
 
     if [[ "$CONFIRM_UFW" =~ [Yy] ]]; then
       CONFIGURE_UFW=true
@@ -550,7 +572,7 @@ main() {
   if [ "$CONFIGURE_LETSENCRYPT" == true ]; then
     while [ -z "$FQDN" ]; do
         echo -n "* Set the FQDN to use for Let's Encrypt (node.example.com): "
-        read -r FQDN
+        # read -r FQDN
 
         ASK=false
 
@@ -560,7 +582,7 @@ main() {
 
         [ "$ASK" == true ] && FQDN=""
         [ "$ASK" == true ] && echo -e -n "* Do you still want to automatically configure HTTPS using Let's Encrypt? (y/N): "
-        [ "$ASK" == true ] && read -r CONFIRM_SSL
+        # [ "$ASK" == true ] && read -r CONFIRM_SSL
 
         if [[ ! "$CONFIRM_SSL" =~ [Yy] ]] && [ "$ASK" == true ]; then
           CONFIGURE_LETSENCRYPT=false
@@ -573,7 +595,7 @@ main() {
     # set EMAIL
     while [ -z "$EMAIL" ]; do
         echo -n "* Enter email address for Let's Encrypt: "
-        read -r EMAIL
+        # read -r EMAIL
 
         [ -z "$EMAIL" ] && print_error "Email cannot be empty"
     done
@@ -581,7 +603,7 @@ main() {
 
   echo -n "* Proceed with installation? (y/N): "
 
-  read -r CONFIRM
+  # read -r CONFIRM
   [[ "$CONFIRM" =~ [Yy] ]] && perform_install && return
 
   print_error "Installation aborted"
@@ -611,6 +633,8 @@ function goodbye {
   [ "$CONFIGURE_FIREWALL" == false ] && echo -e "* ${COLOR_RED}Note${COLOR_NC}: If you haven't configured your firewall, ports 8080 and 2022 needs to be open."
   print_brake 70
   echo ""
+  sleep 60s
+  wings --debug
 }
 
 # run script
